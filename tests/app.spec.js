@@ -1,0 +1,245 @@
+import { test, expect } from '@playwright/test';
+
+test('再開時に月払い・年払いの基準日を変更でき、年額カードに月額換算を表示する',async({page})=>{
+  await page.goto('/');
+  await page.evaluate(()=>{
+    const base={plan:'',category:'暮らし',color:'#718951',url:'',note:'',logo:'S',status:'paused',date:'2026-01-31'};
+    localStorage.setItem('subnote-v1',JSON.stringify({demo:false,budget:15000,subscriptions:[
+      {...base,id:'resume-monthly',name:'月払いテスト',cycle:'monthly',price:1000},
+      {...base,id:'resume-yearly',name:'年払いテスト',cycle:'yearly',price:12000},
+      {...base,id:'round-yearly',name:'端数年払い',cycle:'yearly',price:10000},
+    ]}));
+  });
+  await page.reload();
+  await page.locator('nav [data-nav="subscriptions"]').click();
+  await expect(page.locator('[data-detail="resume-yearly"]')).toContainText('/ 年（月あたり¥1,000）');
+  await expect(page.locator('[data-detail="round-yearly"]')).toContainText('（月あたり約¥833）');
+  await expect(page.locator('[data-detail="resume-monthly"] .monthly-equivalent')).toHaveCount(0);
+  await page.setViewportSize({width:390,height:844});
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  await page.locator('[data-detail="resume-monthly"]').click();
+  await page.getByRole('button',{name:'利用を再開',exact:true}).click();
+  await expect(page.getByLabel('再開後の支払い基準日')).toHaveValue('2026-01-31');
+  await page.getByLabel('再開後の支払い基準日').fill('2027-02-20');
+  await page.getByRole('button',{name:'キャンセル',exact:true}).click();
+  expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('subnote-v1')).subscriptions[0].date)).toBe('2026-01-31');
+  await page.locator('[data-detail="resume-monthly"]').click();
+  await page.getByRole('button',{name:'利用を再開',exact:true}).click();
+  await page.getByLabel('再開後の支払い基準日').fill('');
+  await page.locator('#confirm-action').click();
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await page.getByLabel('再開後の支払い基準日').fill('2027-02-20');
+  await page.locator('#confirm-action').click();
+  await page.locator('[data-detail="resume-yearly"]').click();
+  await page.getByRole('button',{name:'利用を再開',exact:true}).click();
+  await expect(page.locator('#resume-date-help')).toContainText('毎年同じ月日');
+  await page.getByLabel('再開後の支払い基準日').fill('2027-03-12');
+  await page.locator('#confirm-action').click();
+  await page.reload();
+  const saved=await page.evaluate(()=>JSON.parse(localStorage.getItem('subnote-v1')).subscriptions);
+  expect(saved[0]).toMatchObject({date:'2027-02-20',status:'active'});
+  expect(saved[1]).toMatchObject({date:'2027-03-12',status:'active'});
+  await page.locator('nav [data-nav="insights"]').click();
+  await page.getByLabel('レポートの対象月').fill('2027-01');
+  await expect(page.locator('.monthly-chart strong')).toHaveText('¥0');
+  await page.getByLabel('レポートの対象月').fill('2027-02');
+  await expect(page.locator('.monthly-chart strong')).toHaveText('¥1,000');
+  await expect(page.locator('.breakdown-row')).toContainText('2月20日');
+  await page.getByLabel('レポートの対象月').fill('2027-03');
+  await expect(page.locator('.monthly-chart strong')).toHaveText('¥13,000');
+  await expect(page.locator('.breakdown-row').first()).toContainText('3月12日');
+  await page.getByLabel('レポートの対象月').fill('2028-03');
+  await expect(page.locator('.monthly-chart strong')).toHaveText('¥13,000');
+});
+
+test('概要は3項目、月別円グラフは支払月の金額を集計する',async({page})=>{
+  await page.addInitScript(()=>{
+    const base={plan:'',category:'暮らし',color:'#718951',url:'',note:'',logo:'S',status:'active',cycle:'monthly',date:'2026-01-01'};
+    localStorage.setItem('subnote-v1',JSON.stringify({demo:false,budget:15000,subscriptions:[
+      {...base,id:'monthly',name:'月払いサービス',price:1000},
+      {...base,id:'yearly',name:'年払いサービス',price:12000,cycle:'yearly',date:'2026-12-15'},
+      {...base,id:'paused',name:'停止サービス',price:3000,status:'paused'},
+      {...base,id:'cancelled',name:'終了サービス',price:4000,status:'cancelled'},
+    ]}));
+  });
+  await page.goto('/');
+  await expect(page.locator('.stat-card')).toHaveCount(3);
+  await expect(page.locator('.stats-grid')).toContainText('次のお支払い');
+  await expect(page.locator('.stats-grid')).not.toContainText('お休み中');
+  await page.locator('nav [data-nav="insights"]').click();
+  await expect(page.locator('.stats-grid')).toHaveCount(0);
+  await page.getByLabel('レポートの対象月').fill('2026-12');
+  await expect(page.locator('.monthly-chart strong')).toHaveText('¥13,000');
+  await expect(page.locator('.breakdown-row')).toHaveCount(2);
+  await expect(page.locator('.budget-number')).toContainText('¥13,000');
+  await page.getByRole('button',{name:'年別',exact:true}).click();
+  await expect(page.getByLabel('レポートの対象年')).toHaveValue('2026');
+  await expect(page.locator('.annual-bar-column')).toHaveCount(12);
+  await expect(page.locator('.annual-total strong')).toHaveText('¥24,000');
+  await expect(page.locator('.annual-bar-column').first()).toContainText('¥1,000');
+  await expect(page.locator('.annual-bar-column').last()).toContainText('¥13,000');
+  await expect(page.locator('.annual-table tbody tr')).toHaveCount(2);
+  await expect(page.locator('.budget-number')).toContainText('¥13,000');
+  await page.setViewportSize({width:1440,height:1000});
+  await page.screenshot({path:'test-results/annual-report-desktop.png',fullPage:true});
+  await page.setViewportSize({width:390,height:844});
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  await page.screenshot({path:'test-results/annual-report-mobile.png',fullPage:true});
+  await page.getByRole('button',{name:'レポートの前の年'}).click();
+  await expect(page.getByLabel('レポートの対象年')).toHaveValue('2025');
+  await expect(page.locator('.annual-total strong')).toHaveText('¥0');
+  await page.getByRole('button',{name:'レポートの次の年'}).click();
+  await expect(page.locator('.annual-total strong')).toHaveText('¥24,000');
+  await page.getByLabel('レポートの対象年').fill('2027');
+  await page.getByLabel('レポートの対象年').press('Tab');
+  await expect(page.getByRole('heading',{name:'2027年の月ごとの支出'})).toBeVisible();
+  await page.getByLabel('レポートの対象年').fill('2026');
+  await page.getByLabel('レポートの対象年').press('Tab');
+  await page.locator('[data-report-drill="11"]').click();
+  await expect(page.getByLabel('レポートの対象月')).toHaveValue('2026-12');
+  await expect(page.locator('.monthly-chart strong')).toHaveText('¥13,000');
+  await page.getByRole('button',{name:'レポートの次の月'}).click();
+  await expect(page.getByLabel('レポートの対象月')).toHaveValue('2027-01');
+  await expect(page.locator('.monthly-chart strong')).toHaveText('¥1,000');
+  await expect(page.locator('.breakdown-row')).toHaveCount(1);
+  await page.getByRole('button',{name:'レポートの前の月'}).click();
+  await expect(page.locator('.monthly-chart strong')).toHaveText('¥13,000');
+  await page.getByLabel('レポートの対象月').fill('2025-12');
+  await expect(page.locator('.monthly-chart strong')).toHaveText('¥0');
+  await expect(page.locator('.service-breakdown')).toContainText('この月のお支払い予定はありません');
+  await page.getByRole('button',{name:'年別',exact:true}).click();
+  await page.getByRole('button',{name:'今月',exact:true}).click();
+  const now=new Date();
+  await expect(page.getByLabel('レポートの対象月')).toHaveValue(`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`);
+  await page.setViewportSize({width:1440,height:1000});
+  await page.screenshot({path:'test-results/monthly-report-desktop.png',fullPage:true});
+  await page.setViewportSize({width:390,height:844});
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  await page.screenshot({path:'test-results/monthly-report-mobile.png',fullPage:true});
+  await page.locator('nav [data-nav="subscriptions"]').click();
+  await expect(page.locator('.stat-card')).toHaveCount(3);
+  await page.getByRole('button',{name:'一時停止中',exact:true}).click();
+  await expect(page.locator('.subscription-card')).toContainText('停止サービス');
+  await page.getByRole('button',{name:'利用終了',exact:true}).click();
+  await expect(page.locator('.subscription-card')).toContainText('終了サービス');
+});
+
+test('登録・編集・一時停止・再開・利用終了・削除と永続化', async ({page}) => {
+  const errors=[];
+  page.on('pageerror',e=>errors.push(e.message));
+  await page.goto('/');
+  await expect(page.getByRole('heading',{name:'サブスクを、ひと目で。'})).toBeVisible();
+  await expect(page.locator('.calendar-event')).toHaveCount(7);
+  await page.getByRole('button',{name:'自分のサブスクで始める'}).click();
+  await page.getByRole('button',{name:'空のカレンダーで始める'}).click();
+  await expect(page.locator('.calendar-event')).toHaveCount(0);
+  await page.getByRole('button',{name:'サブスクを追加',exact:true}).click();
+  await page.getByLabel('サービス名').fill('テスト音楽');
+  await page.getByLabel('プラン名').fill('プレミアム');
+  await page.getByLabel('料金（円）').fill('1500');
+  const now=new Date();
+  const date=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-15`;
+  await page.getByLabel('支払い基準日').fill(date);
+  await page.getByLabel('サービスの管理ページ URL').fill('https://example.com/account');
+  await page.getByRole('dialog').getByRole('button',{name:'サブスクを追加'}).click();
+  await expect(page.locator('.calendar-event')).toHaveCount(1);
+  await expect(page.locator('.main-stat .stat-value')).toContainText('¥1,500');
+  await page.reload();
+  await expect(page.locator('.calendar-event')).toHaveCount(1);
+  await page.locator('.calendar-event').click();
+  await page.getByRole('button',{name:'編集',exact:true}).click();
+  await page.getByLabel('料金（円）').fill('2200');
+  await page.getByRole('button',{name:'変更を保存'}).click();
+  await expect(page.locator('.main-stat .stat-value')).toContainText('¥2,200');
+  await page.locator('.calendar-event').click();
+  await expect(page.getByRole('link',{name:'サービスの管理ページ'})).toHaveAttribute('href','https://example.com/account');
+  await page.getByRole('button',{name:'一時停止',exact:true}).click();
+  await page.locator('#confirm-action').click();
+  await expect(page.locator('.calendar-event')).toHaveCount(0);
+  await expect(page.locator('.main-stat .stat-value')).toContainText('¥0');
+  await page.locator('.subscription-card').click();
+  await page.getByRole('button',{name:'利用を再開'}).click();
+  await page.locator('#confirm-action').click();
+  await expect(page.locator('.calendar-event')).toHaveCount(1);
+  await page.locator('.calendar-event').click();
+  await page.getByRole('button',{name:'利用終了にする'}).click();
+  await page.locator('#confirm-action').click();
+  await expect(page.locator('.calendar-event')).toHaveCount(0);
+  await page.reload();
+  await expect(page.locator('.subscription-card .status')).toHaveText('利用終了');
+  await page.locator('.subscription-card').click();
+  await page.getByRole('button',{name:'記録を削除'}).click();
+  await page.locator('#confirm-action').click();
+  await expect(page.locator('.subscription-card')).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
+test('月の移動・カテゴリ・一覧検索・レポート・予算・バックアップ', async ({page})=>{
+  await page.goto('/');
+  const month=await page.locator('.month-nav h3').textContent();
+  await page.getByRole('button',{name:'次の月'}).click();
+  await expect(page.locator('.month-nav h3')).not.toHaveText(month);
+  await page.getByRole('button',{name:'今月',exact:true}).click();
+  await expect(page.locator('.month-nav h3')).toHaveText(month);
+  await page.getByLabel('カレンダーのカテゴリ').selectOption('エンタメ');
+  await expect(page.locator('.calendar-event')).toHaveCount(3);
+  await page.getByRole('button',{name:'リスト',exact:true}).click();
+  await expect(page.locator('.calendar-list-row')).toHaveCount(3);
+  await page.locator('nav [data-nav="subscriptions"]').click();
+  await page.getByRole('textbox',{name:'サービス名で検索'}).fill('spotify');
+  await expect(page.locator('.subscription-card')).toHaveCount(1);
+  await page.getByRole('textbox',{name:'サービス名で検索'}).fill('');
+  await page.getByRole('button',{name:'一時停止中',exact:true}).click();
+  await expect(page.locator('.subscription-card')).toHaveCount(1);
+  await expect(page.locator('.subscription-card')).toContainText('ChatGPT');
+  await page.locator('nav [data-nav="insights"]').click();
+  await expect(page.getByRole('heading',{name:'月別の支出レポート'})).toBeVisible();
+  await page.getByRole('button',{name:'予算を変更'}).click();
+  await page.getByLabel('月の予算（円）').fill('20000');
+  await page.getByRole('button',{name:'予算を保存'}).click();
+  await page.reload();
+  await page.locator('[data-nav="settings"]').click();
+  await expect(page.getByLabel('月の予算（円）')).toHaveValue('20000');
+  const download=page.waitForEvent('download');
+  await page.getByRole('button',{name:'JSONでバックアップ'}).click();
+  expect((await download).suggestedFilename()).toMatch(/subway-backup-.*\.json/);
+  const backup={budget:35000,demo:false,subscriptions:[{id:'import-test',name:'復元サービス',price:500,cycle:'monthly',date:'2026-01-01',category:'暮らし',status:'active',color:'#718951',url:'',plan:'',logo:'R',note:''}]};
+  await page.locator('#import-file').setInputFiles({name:'backup.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(backup))});
+  await page.getByRole('button',{name:'復元する',exact:true}).click();
+  await expect(page.getByLabel('月の予算（円）')).toHaveValue('35000');
+  await page.locator('nav [data-nav="subscriptions"]').click();
+  await expect(page.locator('.subscription-card')).toHaveCount(1);
+  await expect(page.locator('.subscription-card')).toContainText('復元サービス');
+});
+
+test('不正なバックアップを拒否し、HTMLを文字列として表示する',async({page})=>{
+  await page.goto('/');
+  await page.locator('[data-nav="settings"]').click();
+  await page.locator('#import-file').setInputFiles({name:'bad.json',mimeType:'application/json',buffer:Buffer.from('{"subscriptions":[]}')});
+  await expect(page.locator('#toast')).toContainText('読み込めませんでした');
+  await page.getByRole('button',{name:'サブスクを追加',exact:true}).click();
+  await page.getByLabel('サービス名').fill('<img src=x onerror=alert(1)>');
+  await page.getByLabel('料金（円）').fill('999');
+  await page.getByRole('dialog').getByRole('button',{name:'サブスクを追加'}).click();
+  await page.locator('nav [data-nav="subscriptions"]').click();
+  await expect(page.locator('.subscription-card').last()).toContainText('<img src=x onerror=alert(1)>');
+  await expect(page.locator('.subscription-card img')).toHaveCount(0);
+});
+
+test('デスクトップとモバイルで表示・モーダル操作を確認',async({page})=>{
+  await page.setViewportSize({width:1440,height:1100});
+  await page.goto('/');
+  await page.evaluate(()=>document.fonts.ready);
+  await page.screenshot({path:'test-results/subnote-desktop.png',fullPage:true});
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  await page.setViewportSize({width:390,height:844});
+  await page.screenshot({path:'test-results/subnote-mobile.png',fullPage:true});
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  await page.getByRole('button',{name:'サブスクを追加',exact:true}).click();
+  await expect(page.getByRole('dialog')).toBeVisible();
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await page.locator('nav [data-nav="subscriptions"]').click();
+  await expect(page.locator('.subscription-card')).toHaveCount(8);
+});
