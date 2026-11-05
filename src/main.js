@@ -1,6 +1,7 @@
 import { createIcons, Layers2, Sprout, ChevronsUpDown, CalendarDays, LayoutGrid, ChartNoAxesCombined, Leaf, Settings2, HardDrive, CircleHelp, Plus, ArrowUpRight, Wallet, Layers, CalendarClock, Pause, Calendar, List, ChevronLeft, ChevronRight, SlidersHorizontal, X, Coffee, ArrowRight, ShieldCheck, Search, Info, Download, Upload, Database, Check, Pencil, ExternalLink, Play, Trash2, CircleAlert, Cloud, Youtube, Sparkles, AudioLines } from 'lucide';
 import './style.css';
 import './report.css';
+import './mobile.css';
 import { validReminder, reminderKey, reminderDate, reminderTime, defaultCancellationDate, dueReminders, reminderMessage, reminderFields } from './reminders.js';
 import { CATEGORIES, localDate, parseDate, occurrence, nextPayment, monthlyPrice, demoSubscriptions } from './model.js';
 
@@ -37,7 +38,7 @@ function render() {
   const total = monthly();
   app.innerHTML = `
     <aside class="sidebar">
-      <a href="#" class="brand" aria-label="subway ホーム"><span class="brand-mark">${icon('layers-2')}</span>subway<span class="brand-dot">.</span></a>
+      <a href="#" class="brand" aria-label="subway ホーム"><img class="brand-mark" src="/app-icon.png" alt="" width="40" height="40" />subway<span class="brand-dot">.</span></a>
       <div class="workspace"><div class="workspace-icon">${icon('sprout')}</div><div><strong>マイワークスペース</strong><span>わたしのサブスク管理</span></div>${icon('chevrons-up-down')}</div>
       <div class="nav-label">WORKSPACE</div>
       <nav>${navItem('calendar', 'カレンダー', 'calendar-days')}${navItem('subscriptions', 'サブスク一覧', 'layout-grid', data.subscriptions.length)}${navItem('insights', '支出レポート', 'chart-no-axes-combined')}</nav>
@@ -77,7 +78,7 @@ function checkReminders() {
       const key=reminderKey(s);
       if(s.reminder.deliveredKey===key)continue;
       try{
-        const notification=new Notification('解約通知',{body:reminderMessage(s),tag:key,icon:'/favicon.svg'});
+        const notification=new Notification('解約通知',{body:reminderMessage(s),tag:key,icon:'/app-icon.png'});
         notification.onclick=()=>{window.focus();notificationModal();notification.close();};
         s.reminder.deliveredKey=key;changed=true;
       }catch{/* ブラウザー通知非対応の場合もアプリ内通知は表示する */}

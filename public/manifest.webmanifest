@@ -1,0 +1,13 @@
+{
+  "name": "subway — サブスク管理",
+  "short_name": "subway",
+  "lang": "ja",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f7f8f5",
+  "theme_color": "#263d30",
+  "icons": [
+    { "src": "/app-icon.png", "sizes": "1024x1024", "type": "image/png", "purpose": "any" }
+  ]
+}
