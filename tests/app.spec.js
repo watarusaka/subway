@@ -1,10 +1,10 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './auth-fixture.js';
 
 test('再開時に月払い・年払いの基準日を変更でき、年額カードに月額換算を表示する',async({page})=>{
   await page.goto('/');
   await page.evaluate(()=>{
     const base={plan:'',category:'暮らし',color:'#718951',url:'',note:'',logo:'S',status:'paused',date:'2026-01-31'};
-    localStorage.setItem('subnote-v1',JSON.stringify({demo:false,budget:15000,subscriptions:[
+    localStorage.setItem('subnote-v1:user:11111111-1111-4111-8111-111111111111',JSON.stringify({demo:false,budget:15000,subscriptions:[
       {...base,id:'resume-monthly',name:'月払いテスト',cycle:'monthly',price:1000},
       {...base,id:'resume-yearly',name:'年払いテスト',cycle:'yearly',price:12000},
       {...base,id:'round-yearly',name:'端数年払い',cycle:'yearly',price:10000},
@@ -22,7 +22,7 @@ test('再開時に月払い・年払いの基準日を変更でき、年額カ�
   await expect(page.getByLabel('再開後の支払い基準日')).toHaveValue('2026-01-31');
   await page.getByLabel('再開後の支払い基準日').fill('2027-02-20');
   await page.getByRole('button',{name:'キャンセル',exact:true}).click();
-  expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('subnote-v1')).subscriptions[0].date)).toBe('2026-01-31');
+  expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('subnote-v1:user:11111111-1111-4111-8111-111111111111')).subscriptions[0].date)).toBe('2026-01-31');
   await page.locator('[data-detail="resume-monthly"]').click();
   await page.getByRole('button',{name:'利用を再開',exact:true}).click();
   await page.getByLabel('再開後の支払い基準日').fill('');
@@ -36,7 +36,7 @@ test('再開時に月払い・年払いの基準日を変更でき、年額カ�
   await page.getByLabel('再開後の支払い基準日').fill('2027-03-12');
   await page.locator('#confirm-action').click();
   await page.reload();
-  const saved=await page.evaluate(()=>JSON.parse(localStorage.getItem('subnote-v1')).subscriptions);
+  const saved=await page.evaluate(()=>JSON.parse(localStorage.getItem('subnote-v1:user:11111111-1111-4111-8111-111111111111')).subscriptions);
   expect(saved[0]).toMatchObject({date:'2027-02-20',status:'active'});
   expect(saved[1]).toMatchObject({date:'2027-03-12',status:'active'});
   await page.locator('nav [data-nav="insights"]').click();
@@ -55,7 +55,7 @@ test('再開時に月払い・年払いの基準日を変更でき、年額カ�
 test('概要は3項目、月別円グラフは支払月の金額を集計する',async({page})=>{
   await page.addInitScript(()=>{
     const base={plan:'',category:'暮らし',color:'#718951',url:'',note:'',logo:'S',status:'active',cycle:'monthly',date:'2026-01-01'};
-    localStorage.setItem('subnote-v1',JSON.stringify({demo:false,budget:15000,subscriptions:[
+    localStorage.setItem('subnote-v1:user:11111111-1111-4111-8111-111111111111',JSON.stringify({demo:false,budget:15000,subscriptions:[
       {...base,id:'monthly',name:'月払いサービス',price:1000},
       {...base,id:'yearly',name:'年払いサービス',price:12000,cycle:'yearly',date:'2026-12-15'},
       {...base,id:'paused',name:'停止サービス',price:3000,status:'paused'},

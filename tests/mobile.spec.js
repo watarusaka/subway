@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './auth-fixture.js';
 
 for (const width of [320, 390, 430]) {
   test(`縦画面${width}pxで全画面と登録フォームを操作できる`, async ({ page }) => {

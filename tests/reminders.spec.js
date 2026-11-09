@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './auth-fixture.js';
 
 test('subwayの表示・AIカテゴリ・タブ順・解約日の初期設定と9時通知',async({page})=>{
   await page.clock.install({time:new Date('2027-02-25T08:59:59+09:00')});
