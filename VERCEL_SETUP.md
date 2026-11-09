@@ -10,7 +10,7 @@
 2. https://vercel.com/new を開き、GitHubの `watarusaka/subway` をImportします。
 3. Framework PresetはVite、Root Directoryはルート（空欄または `./`）を選びます。
 4. Install Commandは `npm ci`、Build Commandは `npm run build`、Output Directoryは `dist` です。`vercel.json`にも保存済みです。
-5. この段階では環境変数は不要です。Deployを押し、発行されたHTTPSのURLをスマホとPCで開きます。
+5. GOOGLE_LOGIN_SETUP.mdに従ってSupabase・Googleを設定し、VITE_SUPABASE_URLとVITE_SUPABASE_PUBLISHABLE_KEYを登録します。設定後にDeployを押し、発行されたHTTPSのURLをスマホとPCで開きます。
 6. 更新はGitHubへ反映すると自動でビルド・公開されます。main以外のブランチは通常プレビューになります。
 
 既存の別アプリのVercelプロジェクトは変更せず、subway用の新しいプロジェクトを作成してください。
@@ -22,9 +22,9 @@ Web版の `package.json` と `vercel.json` があるリポジトリルートで 
 
 ## データとログイン
 
-VercelはWebサイトの公開先です。現状はブラウザーのlocalStorageに保存し、Googleログイン・Mac/スマホ間の同期は未実装です。同じURLでも端末間で自動共有されません。
+VercelはWebサイトの公開先です。現状はブラウザーのlocalStorageに保存し、Googleログインには別途Supabaseの接続設定が必要で、Mac/スマホ間のデータ同期は未実装です。同じURLでも端末間で自動共有されません。
 Macの既存アプリの「設定・データ管理」からJSONバックアップを保存して、公開先で復元できます。localhostと公開URLの保存領域は別です。
-Googleログイン・同期には別途Supabase等を接続し、Google OAuthの戻り先を公開URLに設定し、利用者ごとのデータアクセス制御を実装します。ログインやデータ同期が完成したと誤解しないよう、この段階で認証画面を表示しません。
+Googleログインの設定はGOOGLE_LOGIN_SETUP.mdを参照してください。同期は別途データベースと利用者ごとのアクセス制御が必要です。設定がないビルドはログイン準備中の画面になるため、設定前に本番へ反映しないでください。
 
 ## 確認
 

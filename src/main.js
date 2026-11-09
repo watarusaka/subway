@@ -3,15 +3,16 @@ import './style.css';
 import './report.css';
 import './mobile.css';
 import { validReminder, reminderKey, reminderDate, reminderTime, defaultCancellationDate, dueReminders, reminderMessage, reminderFields } from './reminders.js';
-import { CATEGORIES, localDate, parseDate, occurrence, nextPayment, monthlyPrice, demoSubscriptions } from './model.js';
+import { CATEGORIES, localDate, parseDate, occurrence, nextPayment, monthlyPrice } from './model.js';
 
+export function startApp(user, signOut) {
 const icons = { Layers2, Sprout, ChevronsUpDown, CalendarDays, LayoutGrid, ChartNoAxesCombined, Leaf, Settings2, HardDrive, CircleHelp, Plus, ArrowUpRight, Wallet, Layers, CalendarClock, Pause, Calendar, List, ChevronLeft, ChevronRight, SlidersHorizontal, X, Coffee, ArrowRight, ShieldCheck, Search, Info, Download, Upload, Database, Check, Pencil, ExternalLink, Play, Trash2, CircleAlert, Cloud, Youtube, Sparkles, AudioLines };
 
-const KEY = 'subnote-v1';
+const KEY = `subnote-v1:user:${user.id}`;
 const today = new Date();
 let data, storageError = false;
 try { data = JSON.parse(localStorage.getItem(KEY)); } catch { storageError = true; }
-if (!data || !Array.isArray(data.subscriptions)) data = { subscriptions: demoSubscriptions(), demo: true, budget: 15000 };
+if (!data || !Array.isArray(data.subscriptions)) data = { subscriptions: [], demo: false, budget: 15000 };
 let view = 'calendar', cursor = new Date(today.getFullYear(), today.getMonth(), 1), selectedDay = null;
 let reportMonth = new Date(today.getFullYear(), today.getMonth(), 1);
 let reportMode = 'month';
@@ -55,6 +56,16 @@ function render() {
         <footer><span><span class="footer-mark">✳</span> 小さく整えて、暮らしを軽く。</span><span>Made for your everyday.</span></footer>
       </main>
     </div>`;
+  if(view==='settings') {
+    const account=document.createElement('section');
+    account.className='panel account-section';
+    const title=document.createElement('h2');title.textContent='アカウント';
+    const email=document.createElement('p');email.textContent=user.email || 'Googleアカウントでログイン中';
+    const note=document.createElement('p');note.textContent='ログイン状態を維持しています。サブスクのデータは現在、このブラウザーだけに保存されます。';
+    const logout=document.createElement('button');logout.className='btn secondary';logout.textContent='ログアウト';logout.onclick=()=>{if(window.confirm('このブラウザーからログアウトしますか？ 登録データは削除されません。'))void signOut();};
+    const migrate=document.createElement('button');migrate.className='btn secondary';migrate.textContent='ログイン前のデータを取り込む';migrate.dataset.action='import-legacy';
+    account.append(title,email,note,migrate,logout);document.querySelector('main').insertBefore(account,document.querySelector('footer'));
+  }
   refreshIcons();
   const notificationButton=document.createElement('button');
   notificationButton.className='notification-button';
@@ -195,6 +206,13 @@ document.addEventListener('click', e=>{
   }
   if(el.dataset.delete) {const s=data.subscriptions.find(s=>s.id===el.dataset.delete);confirmation('この記録を削除しますか？',`${esc(s.name)}の登録情報が削除されます。この操作は元に戻せません。`,'削除する',()=>{data.subscriptions=data.subscriptions.filter(x=>x.id!==s.id);const ok=save();closeModal();render();if(ok)toast('記録を削除しました');},true);}
   const a=el.dataset.action;
+  if(a==='import-legacy') {
+    try {
+      const previous=JSON.parse(localStorage.getItem('subnote-v1'));
+      if(!previous || !Array.isArray(previous.subscriptions)) {toast('このブラウザーに以前のデータはありません');return;}
+      confirmation('以前のデータを取り込みますか？',`${previous.subscriptions.length}件のサブスクで、現在のアカウントの登録データを置き換えます。必要なら先にJSONバックアップを保存してください。`,'取り込む',()=>{data=previous;const ok=save();closeModal();render();if(ok)toast('以前のデータを取り込みました');});
+    }catch{toast('以前のデータを読み込めませんでした');}
+  }
   if(a==='notifications')notificationModal();
   if(el.dataset.readReminder){const s=data.subscriptions.find(s=>s.id===el.dataset.readReminder);if(s?.reminder){s.reminder.readKey=reminderKey(s);save();notificationModal();}}
   if(a==='enable-notifications'&&'Notification' in window){Notification.requestPermission().then(()=>notificationModal()).catch(()=>toast('ブラウザー通知を有効にできませんでした。アプリ内通知をご利用ください。'));}
@@ -258,4 +276,5 @@ render();
 setInterval(checkReminders,60000);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)checkReminders();});
 window.addEventListener('focus',checkReminders);
-if(storageError)toast('保存データを読み込めなかったため、サンプルを表示しています。');
+if(storageError)toast('保存データを読み込めませんでした。バックアップをご確認ください。');
+}
