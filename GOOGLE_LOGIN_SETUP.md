@@ -40,3 +40,13 @@ Productionと、試す場合はPreviewに設定します。Viteはビルド時�
 実際のGoogle認証は上記サービスの設定後に実機で確認します。自動テストではGoogleやSupabaseに実ログインせず、認証APIをモックします。テスト用のSupabase URLとキーは実運用へ設定しないでください。
 
 ブラウザーテストは `npx playwright test --workers=1` で、専用ポート5175とモック設定の開発サーバーを自動起動します。ローカルの実認証設定は不要です。Linux環境でChromeの代わりにシステムChromiumを使う場合は `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium` を指定します。
+
+## Googleから戻ってもログイン画面になる場合
+
+認証コードの交換をアプリ側で明示的に完了してから、保存済みセッションの復元と認証イベント購読を行います。コールバックのエラーがINITIAL_SESSIONによって消える問題を修正しています。コード・トークン・プロバイダーの詳細エラー本文をログに出しません。
+
+- 照合情報のエラー：ログインを始めたブラウザーと戻ってきたブラウザー・ドメインが同じか確認します。Previewから始めて本番へ戻るとブラウザーの保存領域が異なります。
+- 接続キーのエラー：VercelのProject URLとPublishable keyが同じSupabaseプロジェクトのものか確認して再ビルドします。キーの値をチャットへ貼らないでください。
+- Google側のエラー：Googleのテストユーザー登録、Client ID/Secret、SupabaseのGoogleプロバイダー設定を確認します。画面に出るエラーコードで切り分けます。
+
+画面上のエラーメッセージは共有できますが、URLのcode・access_token・refresh_tokenなどは共有しないでください。
