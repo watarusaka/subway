@@ -22,9 +22,9 @@ Web版の `package.json` と `vercel.json` があるリポジトリルートで 
 
 ## データとログイン
 
-VercelはWebサイトの公開先です。現状はブラウザーのlocalStorageに保存し、Googleログインには別途Supabaseの接続設定が必要で、Mac/スマホ間のデータ同期は未実装です。同じURLでも端末間で自動共有されません。
+VercelはWebサイトの公開先です。現状はブラウザーのlocalStorageに保存し、Googleログインには別途Supabaseの接続設定が必要で、Mac/スマホ間のデータ同期にはCLOUD_SYNC_SETUP.mdにある保存先SQLを一度適用する必要があります。同じURLでも端末間で自動共有されません。
 Macの既存アプリの「設定・データ管理」からJSONバックアップを保存して、公開先で復元できます。localhostと公開URLの保存領域は別です。
-Googleログインの設定はGOOGLE_LOGIN_SETUP.mdを参照してください。同期は別途データベースと利用者ごとのアクセス制御が必要です。設定がないビルドはログイン準備中の画面になるため、設定前に本番へ反映しないでください。
+Googleログインの設定はGOOGLE_LOGIN_SETUP.mdを参照してください。同期のデータベースと利用者ごとのアクセス制御はCLOUD_SYNC_SETUP.mdに従って作成します。設定がないビルドはログイン準備中の画面になるため、設定前に本番へ反映しないでください。
 
 ## 確認
 

@@ -10,6 +10,7 @@ const client = configured ? createClient(url, key, {
   auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, flowType: 'pkce' },
 }) : null;
 let mountedUser = null;
+let stopSync = () => {};
 let working = false;
 let revision = 0;
 
@@ -50,12 +51,12 @@ async function signOut() {
 async function restore(session) {
   const current = ++revision;
   if (!session) {
-    if (mountedUser) { window.location.replace('/'); return; }
+    if (mountedUser) { stopSync();window.location.replace('/'); return; }
     loginScreen();
     return;
   }
   if (mountedUser === session.user.id) return;
-  if (mountedUser) { window.location.replace('/'); return; }
+  if (mountedUser) { stopSync();window.location.replace('/'); return; }
   loginScreen('', true);
   try {
     // A locally stored session alone is not proof of the user's identity.
@@ -66,7 +67,7 @@ async function restore(session) {
     const { startApp } = await import('./main.js');
     if (current !== revision) return;
     mountedUser = user.id;
-    startApp(user, signOut);
+    stopSync = await startApp(user, signOut, client);
   } catch {
     if (current === revision) loginScreen('ログインを確認できませんでした。通信状態を確認するか、もう一度ログインしてください。');
   }
