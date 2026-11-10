@@ -6,6 +6,7 @@ export const TOKEN_KEY='sb-subway-test-auth-token';
 export const user={id:USER_ID,aud:'authenticated',role:'authenticated',email:'owner@example.com',app_metadata:{provider:'google',providers:['google']},user_metadata:{},created_at:'2026-01-01T00:00:00Z'};
 export const session={access_token:'test-access-token',refresh_token:'test-refresh-token',token_type:'bearer',expires_in:3600,expires_at:4102444800,user};
 export async function mockAuth(page) {
+ await page.route('https://subway-test.supabase.co/rest/v1/**',route=>route.fulfill({status:404,json:{code:'PGRST205',message:'Schema not installed in this auth-only test'}}));
  await page.route('https://subway-test.supabase.co/auth/v1/**', async route=>{
   const url=new URL(route.request().url());
   if(url.pathname.endsWith('/user'))return route.fulfill({json:user});

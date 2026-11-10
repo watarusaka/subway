@@ -1,0 +1,4 @@
+.sync-banner{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 20px;padding:10px 14px;border-radius:8px;background:#edf3e5;color:#4c673c;font-size:12px;line-height:1.8}
+.sync-banner .text-btn{flex-shrink:0;min-height:44px}
+.sync-banner[data-state="conflict"],.sync-banner[data-state="error"],.sync-banner[data-state="setup"],.sync-banner[data-state="storage"]{background:#fff2df;color:#815829}
+@media(max-width:700px){.sync-banner{align-items:flex-start;font-size:12px;padding:10px;gap:8px}.sync-banner span{min-width:0;overflow-wrap:anywhere}.account-section .btn{white-space:normal;max-width:100%}}

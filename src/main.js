@@ -2,15 +2,19 @@ import { createIcons, Layers2, Sprout, ChevronsUpDown, CalendarDays, LayoutGrid,
 import './style.css';
 import './report.css';
 import './mobile.css';
+import './sync.css';
+import { createCloudSync, supabaseStore } from './cloud-sync.js';
 import { validReminder, reminderKey, reminderDate, reminderTime, defaultCancellationDate, dueReminders, reminderMessage, reminderFields } from './reminders.js';
 import { CATEGORIES, localDate, parseDate, occurrence, nextPayment, monthlyPrice } from './model.js';
 
-export function startApp(user, signOut) {
+export async function startApp(user, signOut, client) {
 const icons = { Layers2, Sprout, ChevronsUpDown, CalendarDays, LayoutGrid, ChartNoAxesCombined, Leaf, Settings2, HardDrive, CircleHelp, Plus, ArrowUpRight, Wallet, Layers, CalendarClock, Pause, Calendar, List, ChevronLeft, ChevronRight, SlidersHorizontal, X, Coffee, ArrowRight, ShieldCheck, Search, Info, Download, Upload, Database, Check, Pencil, ExternalLink, Play, Trash2, CircleAlert, Cloud, Youtube, Sparkles, AudioLines };
 
 const KEY = `subnote-v1:user:${user.id}`;
 const today = new Date();
 let data, storageError = false;
+let syncState='loading';
+let sync;
 try { data = JSON.parse(localStorage.getItem(KEY)); } catch { storageError = true; }
 if (!data || !Array.isArray(data.subscriptions)) data = { subscriptions: [], demo: false, budget: 15000 };
 let view = 'calendar', cursor = new Date(today.getFullYear(), today.getMonth(), 1), selectedDay = null;
@@ -31,7 +35,7 @@ const events = () => data.subscriptions.map(s => ({ sub: s, date: occurrence(s, 
 const filtered = () => data.subscriptions.filter(s => (!search || `${s.name} ${s.plan}`.toLowerCase().includes(search.toLowerCase())) && (category === 'all' || s.category === category) && (status === 'all' || s.status === status));
 function logo(s, small = false) { const symbol = ['cloud', 'youtube', 'sparkles', 'spotify'].includes(s.logo) ? icon(s.logo === 'spotify' ? 'audio-lines' : s.logo) : esc(s.logo || s.name.slice(0, 1)); return `<span class="service-logo ${small ? 'small' : ''}" style="--brand:${esc(s.color)}">${symbol}</span>`; }
 function refreshIcons() { createIcons({ icons, attrs: { 'stroke-width': 1.7 } }); }
-function save() { try { localStorage.setItem(KEY, JSON.stringify(data)); return true; } catch { toast('保存できませんでした。ブラウザーの保存設定を確認してください。'); return false; } }
+function save() { try { localStorage.setItem(KEY, JSON.stringify(data)); if(sync&&!sync.enqueue(data)){toast('この端末には保存しましたが、同期待ちの記録を保存できませんでした。JSONバックアップを保存してください。');return false;}return true; } catch { toast('保存できませんでした。ブラウザーの保存設定を確認してください。'); return false; } }
 function toast(message) { const el = document.querySelector('#toast'); el.textContent = message; el.classList.add('show'); clearTimeout(toast.timer); toast.timer = setTimeout(() => el.classList.remove('show'), 3800); }
 function navItem(id, label, glyph, count = '') { return `<button class="nav-item ${view === id ? 'active' : ''}" data-nav="${id}">${icon(glyph)}<span>${label}</span>${count ? `<b>${count}</b>` : ''}</button>`; }
 
@@ -47,8 +51,9 @@ function render() {
       <div class="sidebar-bottom">${navItem('settings', '設定・データ管理', 'settings-2')}<div class="profile"><span class="avatar">M</span><div><strong>マイアカウント</strong><small>ローカルワークスペース</small></div><span class="local-dot"></span></div></div>
     </aside>
     <div class="main-shell">
-      <header class="topbar"><span>ワークスペース <span class="slash">/</span> <strong>${{calendar:'カレンダー',subscriptions:'サブスク一覧',insights:'支出レポート',settings:'設定・データ管理'}[view]}</strong></span><div class="topbar-right"><span class="save-label">${icon('hard-drive')}このブラウザーに保存</span><button class="icon-btn help-btn" data-action="help" aria-label="使い方">${icon('circle-help')}</button><span class="avatar small-avatar">M</span></div></header>
+      <header class="topbar"><span>ワークスペース <span class="slash">/</span> <strong>${{calendar:'カレンダー',subscriptions:'サブスク一覧',insights:'支出レポート',settings:'設定・データ管理'}[view]}</strong></span><div class="topbar-right"><span class="save-label">${icon('hard-drive')}端末にもバックアップ</span><button class="icon-btn help-btn" data-action="help" aria-label="使い方">${icon('circle-help')}</button><span class="avatar small-avatar">M</span></div></header>
       <main>
+        <div class="sync-banner" role="status"><span id="sync-state"></span><button class="text-btn" data-action="sync-refresh">同期を確認</button></div>
         <div class="page-heading"><div><div class="eyebrow">YOUR SUBSCRIPTIONS, SIMPLIFIED</div><h1>${{calendar:'サブスクを、ひと目で。',subscriptions:'お気に入りを、ひとまとめに。',insights:'支出を知って、心地よく。',settings:'あなたらしい管理を。'}[view]}</h1></div><button class="btn primary" data-action="add">${icon('plus')}サブスクを追加</button></div>
         ${data.demo ? `<div class="demo-note"><span class="demo-tag">DEMO</span>サンプルデータで体験中です。料金はデモ用の参考値です。<button data-action="start">自分のサブスクで始める ${icon('arrow-up-right')}</button></div>` : ''}
         ${['calendar','subscriptions'].includes(view) ? stats(total) : ''}
@@ -61,10 +66,11 @@ function render() {
     account.className='panel account-section';
     const title=document.createElement('h2');title.textContent='アカウント';
     const email=document.createElement('p');email.textContent=user.email || 'Googleアカウントでログイン中';
-    const note=document.createElement('p');note.textContent='ログイン状態を維持しています。サブスクのデータは現在、このブラウザーだけに保存されます。';
+    const note=document.createElement('p');note.textContent='同じGoogleアカウントの端末で、サブスク・解約通知設定・予算を同期します。通信できない間の編集は、この端末に保管して再接続時に送信します。';
     const logout=document.createElement('button');logout.className='btn secondary';logout.textContent='ログアウト';logout.onclick=()=>{if(window.confirm('このブラウザーからログアウトしますか？ 登録データは削除されません。'))void signOut();};
     const migrate=document.createElement('button');migrate.className='btn secondary';migrate.textContent='ログイン前のデータを取り込む';migrate.dataset.action='import-legacy';
-    account.append(title,email,note,migrate,logout);document.querySelector('main').insertBefore(account,document.querySelector('footer'));
+    const resolve=document.createElement('button');resolve.className='btn secondary';resolve.textContent='クラウドの内容を読み直す';resolve.dataset.action='sync-accept';const backups=document.createElement('button');backups.className='btn secondary';backups.textContent='退避した端末データをダウンロード';backups.dataset.action='sync-backup';
+    account.append(title,email,note,migrate,resolve,backups,logout);document.querySelector('main').insertBefore(account,document.querySelector('footer'));
   }
   refreshIcons();
   const notificationButton=document.createElement('button');
@@ -75,6 +81,7 @@ function render() {
   document.querySelector('.topbar-right').prepend(notificationButton);
   refreshIcons();
   checkReminders();
+  showSyncState();
 }
 
 let reminderTimer;
@@ -166,7 +173,7 @@ function insightsPage() {
     <div class="insights-grid ${reportMode==='year'?'annual-layout':''}">${reportMode==='year'?annualReport(year):`<section class="panel report-panel"><h2>${year}年${month+1}月の支出</h2><p class="section-caption">サービス別の支払予定・${payments.length}サービス</p><div class="donut monthly-chart" role="img" aria-label="${year}年${month+1}月の支払予定の円グラフ。合計${money(total)}。内訳は下の一覧に記載。" style="background:conic-gradient(${total?segments.map(s=>s.gradient).join(','):'#e8ebe5 0% 100%'})"><div><span>${month+1}月の支払予定合計</span><strong>${money(total)}</strong></div></div><div class="service-breakdown">${segments.map(e=>`<button class="breakdown-row" data-detail="${e.sub.id}"><span class="breakdown-name"><i style="background:${e.color}"></i><span>${esc(e.sub.name)}<small>${dateLabel(e.date)}${e.sub.cycle==='yearly'?' ・ 年払い':''}</small></span></span><strong>${money(e.sub.price)}<small>${total?Math.round(e.sub.price/total*100):0}%</small></strong></button>`).join('') || '<p class="report-empty">この月のお支払い予定はありません。</p>'}</div></section>`}
     <section class="panel report-panel"><h2>${month+1}月の予算</h2><p class="section-caption">選択した月の支払予定と予算を比較</p><div class="budget-number">${money(total)}<span> / ${money(budget)}</span></div><div class="budget-track"><i style="width:${budget?Math.min(total/budget*100,100):0}%;background:${total>budget?'#c97856':'#718951'}"></i></div><p class="budget-caption">${budget ? total<=budget?`予算まで、あと ${money(budget-total)} です。`:`予算を ${money(total-budget)} 超えています。` : '設定から毎月の予算を登録できます。'}</p><button class="btn secondary" data-nav="settings">${icon('sliders-horizontal')}予算を変更</button><div class="ranking"><h3>${month+1}月の支出が大きいサービス</h3>${payments.slice(0,5).map(({sub:s},i)=>`<button class="rank-row" data-detail="${s.id}"><span class="rank">0${i+1}</span>${logo(s,true)}<span>${esc(s.name)}</span><strong>${money(s.price)}</strong></button>`).join('') || '<p class="report-empty">この月のお支払い予定はありません。</p>'}</div></section></div><p class="report-note">${icon('info')}現在の登録内容をもとにした支払予定です。年払いは支払月に全額を計上します。一時停止中・利用終了は集計に含みません。過去の月も実際の請求履歴ではありません。</p>`;
 }
-function settingsPage() { return `<div class="settings-grid"><section class="panel settings-panel"><h2>${icon('wallet')}毎月の予算</h2><p>月額換算の支出を予算と比較できます。</p><form id="budget-form"><label for="budget">月の予算（円）</label><input id="budget" type="number" min="0" max="999999999" step="1" required value="${data.budget}" /><button class="btn primary" type="submit">予算を保存</button></form></section><section class="panel settings-panel"><h2>${icon('database')}データ管理</h2><p>データはこのブラウザーに保存されます。ブラウザーのデータ削除で失われるため、バックアップをご活用ください。</p><button class="btn secondary" data-action="export">${icon('download')}JSONでバックアップ</button><label class="btn secondary import-label">${icon('upload')}バックアップから復元<input type="file" id="import-file" accept=".json,application/json" hidden /></label><button class="text-btn danger-text" data-action="reset">すべてのデータを削除</button></section><section class="panel settings-panel wide"><h2>${icon('circle-help')}subway について</h2><p>サブスクを登録し、カレンダーで支払予定を確認できます。月末日が存在しない月は、その月の末日を支払日として表示します。</p><p>「一時停止」「利用終了」はこのアプリ内の管理状態です。各サービスの契約を変更する際は、詳細画面の「サービスの管理ページ」から手続きを行ってください。停止中のサービスは予定と集計から除外され、再開すると登録済みの支払日に基づいて表示されます。</p><span class="version">subway · VERSION 1.0</span></section></div>`; }
+function settingsPage() { return `<div class="settings-grid"><section class="panel settings-panel"><h2>${icon('wallet')}毎月の予算</h2><p>月額換算の支出を予算と比較できます。</p><form id="budget-form"><label for="budget">月の予算（円）</label><input id="budget" type="number" min="0" max="999999999" step="1" required value="${data.budget}" /><button class="btn primary" type="submit">予算を保存</button></form></section><section class="panel settings-panel"><h2>${icon('database')}データ管理</h2><p>データはログイン中のアカウントへ同期し、この端末にも保存します。同期待ちの編集は端末内にあるため、バックアップもご活用ください。</p><button class="btn secondary" data-action="export">${icon('download')}JSONでバックアップ</button><label class="btn secondary import-label">${icon('upload')}バックアップから復元<input type="file" id="import-file" accept=".json,application/json" hidden /></label><button class="text-btn danger-text" data-action="reset">すべてのデータを削除</button></section><section class="panel settings-panel wide"><h2>${icon('circle-help')}subway について</h2><p>サブスクを登録し、カレンダーで支払予定を確認できます。月末日が存在しない月は、その月の末日を支払日として表示します。</p><p>「一時停止」「利用終了」はこのアプリ内の管理状態です。各サービスの契約を変更する際は、詳細画面の「サービスの管理ページ」から手続きを行ってください。停止中のサービスは予定と集計から除外され、再開すると登録済みの支払日に基づいて表示されます。</p><span class="version">subway · VERSION 1.0</span></section></div>`; }
 
 function openModal(content, wide = false) { lastFocus=document.activeElement; root.innerHTML=`<div class="modal-backdrop"><section class="modal ${wide?'wide-modal':''}" role="dialog" aria-modal="true" aria-labelledby="modal-title"><button class="modal-close icon-btn" data-action="close" aria-label="閉じる">${icon('x')}</button>${content}</section></div>`; refreshIcons(); requestAnimationFrame(()=>root.querySelector('input, .modal-close')?.focus()); }
 function closeModal() { root.innerHTML=''; lastFocus?.isConnected && lastFocus.focus(); }
@@ -206,6 +213,9 @@ document.addEventListener('click', e=>{
   }
   if(el.dataset.delete) {const s=data.subscriptions.find(s=>s.id===el.dataset.delete);confirmation('この記録を削除しますか？',`${esc(s.name)}の登録情報が削除されます。この操作は元に戻せません。`,'削除する',()=>{data.subscriptions=data.subscriptions.filter(x=>x.id!==s.id);const ok=save();closeModal();render();if(ok)toast('記録を削除しました');},true);}
   const a=el.dataset.action;
+  if(a==='sync-refresh')void sync?.refresh(data);
+  if(a==='sync-accept')confirmation('クラウドの内容を読み直しますか？','この端末の編集は退避してから、クラウドの内容を表示します。退避したデータは設定からダウンロードできます。','読み直す',()=>{closeModal();void sync?.acceptRemote(data);});
+  if(a==='sync-backup') {const copies=sync?.backups()||[];if(!copies.length){toast('退避したデータはありません');return;}for(const copy of copies){const file=URL.createObjectURL(new Blob([JSON.stringify(copy.payload,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=file;a.download=`subway-local-backup-${copy.at.replaceAll(':','-')}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(file),1000);}}
   if(a==='import-legacy') {
     try {
       const previous=JSON.parse(localStorage.getItem('subnote-v1'));
@@ -272,9 +282,24 @@ document.addEventListener('submit',e=>{
 });
 root.addEventListener('click',e=>{if(e.target.classList.contains('modal-backdrop'))closeModal();});
 document.addEventListener('keydown',e=>{if(!root.firstChild)return;if(e.key==='Escape')closeModal();if(e.key==='Tab'){const focusable=[...root.querySelectorAll('button,a,input,select,textarea')].filter(el=>!el.disabled);const first=focusable[0],last=focusable.at(-1);if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}}});
+function showSyncState(){
+ const label=document.querySelector('#sync-state');if(!label)return;
+ label.textContent=({loading:'クラウドを確認中…',synced:'クラウドに同期済み',saving:'クラウドに保存中…',pending:'この端末に保存済み・同期待ち',conflict:'他の端末の更新と重なりました。この端末の編集は保管しています。設定からクラウドを読み直してください。',setup:'同期の設定が必要です。データはこの端末に保管しています。',error:'同期できませんでした。この端末に保存しています。通信状態を確認して再試行してください。',storage:'同期待ちの編集を保存できません。JSONバックアップを保存してください。'})[syncState];
+ label.parentElement.dataset.state=syncState;
+}
+try{
+ sync=createCloudSync({store:supabaseStore(client,user.id),storage:localStorage,key:KEY,onStatus:state=>{syncState=state;showSyncState()},onData:next=>{data=next;render()},canApply:()=>!root.firstChild&&!document.activeElement?.matches('input,select,textarea')});
+ data=await sync.initialize(data);
+ localStorage.setItem(KEY,JSON.stringify(data));
+}catch{syncState='storage';}
 render();
-setInterval(checkReminders,60000);
+const reminderInterval=setInterval(checkReminders,60000);
+const syncInterval=setInterval(()=>{if(!document.hidden)void sync?.refresh(data)},15000);
+const syncFocus=()=>{if(!document.hidden)void sync?.refresh(data)};
+window.addEventListener('focus',syncFocus);document.addEventListener('visibilitychange',syncFocus);window.addEventListener('online',syncFocus);
+
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)checkReminders();});
 window.addEventListener('focus',checkReminders);
 if(storageError)toast('保存データを読み込めませんでした。バックアップをご確認ください。');
+return ()=>{sync?.stop();clearInterval(syncInterval);clearInterval(reminderInterval);clearTimeout(reminderTimer);window.removeEventListener('focus',syncFocus);document.removeEventListener('visibilitychange',syncFocus);window.removeEventListener('online',syncFocus);};
 }

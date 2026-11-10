@@ -58,7 +58,7 @@ test('ログイン前のデータは自動投入せず、確認後だけ取り�
  const legacy={subscriptions:[],demo:false,budget:7000};
  await page.addInitScript(({key,session,legacy})=>{localStorage.setItem(key,JSON.stringify(session));localStorage.setItem('subnote-v1',JSON.stringify(legacy));},{key:TOKEN_KEY,session,legacy});
  await page.goto('/');await expect(page.locator('.calendar-panel')).toBeVisible();
- expect(await page.evaluate(key=>localStorage.getItem(key),DATA_KEY)).toBeNull();
+ expect(await page.evaluate(key=>JSON.parse(localStorage.getItem(key)).budget,DATA_KEY)).toBe(15000);
  await page.locator('.sidebar [data-nav="settings"]').click();
  await page.getByRole('button',{name:'ログイン前のデータを取り込む'}).click();
  await page.locator('#confirm-action').click();
