@@ -1,4 +1,6 @@
 import { CATEGORIES, localDate, parseDate } from './model.js';
+import { validCurrency } from './currency.js';
+import { validCampaign } from './campaigns.js';
 import { validReminder } from './reminders.js';
 // A versioned account snapshot. Conditional writes prevent silent cross-device data loss.
 const clone=value=>JSON.parse(JSON.stringify(value));
@@ -7,7 +9,7 @@ export function validCloudData(value) {
  if(!value || !Array.isArray(value.subscriptions) || value.subscriptions.length>1000 || !Number.isFinite(value.budget) || value.budget<0 || value.budget>999999999)return false;
  const ids=new Set();
  return value.subscriptions.every(s=>{
-  if(!s || typeof s.id!=='string' || !/^[a-zA-Z0-9-]{1,80}$/.test(s.id) || ids.has(s.id) || typeof s.name!=='string' || !s.name.trim() || s.name.length>50 || !Number.isInteger(s.price) || s.price<0 || s.price>999999999 || !['monthly','yearly'].includes(s.cycle) || !['active','paused','cancelled'].includes(s.status) || !CATEGORIES.includes(s.category) || typeof s.color!=='string' || !/^#[a-f0-9]{6}$/i.test(s.color) || typeof s.date!=='string' || !/^20\d{2}-\d{2}-\d{2}$/.test(s.date) || localDate(parseDate(s.date))!==s.date || !validReminder(s.reminder) || !['plan','note','url','logo'].every(k=>s[k]===undefined || typeof s[k]==='string') || (s.url&&!/^https?:\/\//i.test(s.url)))return false;
+  if(!s || typeof s.id!=='string' || !/^[a-zA-Z0-9-]{1,80}$/.test(s.id) || ids.has(s.id) || typeof s.name!=='string' || !s.name.trim() || s.name.length>50 || !Number.isInteger(s.price) || s.price<0 || s.price>999999999 || !['monthly','yearly'].includes(s.cycle) || !['active','paused','cancelled'].includes(s.status) || !CATEGORIES.includes(s.category) || typeof s.color!=='string' || !/^#[a-f0-9]{6}$/i.test(s.color) || typeof s.date!=='string' || !/^20\d{2}-\d{2}-\d{2}$/.test(s.date) || localDate(parseDate(s.date))!==s.date || !validReminder(s.reminder) || !validCampaign(s.campaign) || !validCurrency(s) || !['plan','note','url','logo'].every(k=>s[k]===undefined || typeof s[k]==='string') || (s.url&&!/^https?:\/\//i.test(s.url)))return false;
   ids.add(s.id);return true;
  });
 }

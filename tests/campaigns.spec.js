@@ -1,0 +1,34 @@
+import {test,expect,DATA_KEY} from './auth-fixture.js';
+test('既存サブスクへキャンペーンを追加・編集・解除でき、スマホでも入力が収まる',async({page})=>{
+ await page.goto('/');await page.locator('.sidebar [data-nav="subscriptions"]').click();
+ const card=page.locator('.subscription-card').filter({has:page.getByRole('heading',{name:'Netflix',exact:true})});
+ await card.click();await page.getByRole('button',{name:'編集',exact:true}).click();
+ await page.getByLabel('キャンペーンを設定する').check();
+ await page.getByLabel('キャンペーン内容').fill('初月半額・翌月から10%オフ');
+ await page.getByLabel('キャンペーン開始日').fill('2026-11-10');await page.getByLabel('キャンペーン終了日').fill('2026-12-09');
+ await page.getByRole('button',{name:'変更を保存',exact:true}).click();
+ await expect(card.locator('.campaign-summary')).toContainText('初月半額・翌月から10%オフ');
+ await expect(card.locator('.campaign-summary')).toContainText('2026/11/10 〜 2026/12/09');
+ await page.reload();await page.locator('.sidebar [data-nav="subscriptions"]').click();await card.click();
+ await expect(page.getByRole('dialog').locator('.campaign-summary')).toContainText('初月半額');
+ await page.getByRole('button',{name:'編集',exact:true}).click();
+ await expect(page.getByLabel('キャンペーン内容')).toHaveValue('初月半額・翌月から10%オフ');
+ await page.setViewportSize({width:320,height:844});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+ await page.getByLabel('キャンペーン終了日').fill('2026-11-01');await page.getByRole('button',{name:'変更を保存',exact:true}).click();
+ await expect(page.getByRole('dialog')).toBeVisible();await expect(page.locator('#toast')).toContainText('終了日は開始日以降');
+ await page.getByLabel('キャンペーン終了日').fill('2026-12-31');await page.getByLabel('キャンペーン内容').fill('10%オフ');await page.getByRole('button',{name:'変更を保存',exact:true}).click();
+ expect(await page.evaluate(key=>JSON.parse(localStorage.getItem(key)).subscriptions.find(s=>s.name==='Netflix').campaign,DATA_KEY)).toEqual({content:'10%オフ',startDate:'2026-11-10',endDate:'2026-12-31'});
+ await card.click();await page.getByRole('button',{name:'編集',exact:true}).click();await page.getByLabel('キャンペーンを設定する').uncheck();await page.getByRole('button',{name:'変更を保存',exact:true}).click();
+ await expect(card.locator('.campaign-summary')).toHaveCount(0);
+ expect(await page.evaluate(key=>JSON.parse(localStorage.getItem(key)).subscriptions.find(s=>s.name==='Netflix').campaign,DATA_KEY)).toBeUndefined();
+});
+test('新規登録とJSONバックアップ・復元でキャンペーン情報を保持する',async({page})=>{
+ await page.goto('/');await page.getByRole('button',{name:'サブスクを追加',exact:true}).click();await page.getByLabel('サービス名').fill('キャンペーン登録テスト');await page.getByLabel('料金（円）').fill('1000');
+ await page.getByLabel('キャンペーンを設定する').check();await page.getByLabel('キャンペーン内容').fill('<img src=x onerror=alert(1)>初月半額');await page.getByLabel('キャンペーン開始日').fill('2026-11-01');await page.getByLabel('キャンペーン終了日').fill('2026-11-30');await page.getByRole('dialog').getByRole('button',{name:'サブスクを追加',exact:true}).click();
+ await page.locator('.sidebar [data-nav="subscriptions"]').click();await expect(page.locator('.campaign-summary')).toContainText('<img src=x onerror=alert(1)>');await expect(page.locator('.campaign-summary img')).toHaveCount(0);
+ const saved=await page.evaluate(key=>localStorage.getItem(key),DATA_KEY);
+ await page.locator('.sidebar [data-nav="settings"]').click();await page.locator('#import-file').setInputFiles({name:'campaign.json',mimeType:'application/json',buffer:Buffer.from(saved)});await page.locator('#confirm-action').click();
+ await page.locator('.sidebar [data-nav="subscriptions"]').click();await expect(page.locator('.campaign-summary')).toContainText('初月半額');
+ const invalid=JSON.parse(saved);invalid.subscriptions.at(-1).campaign.endDate='2026-01-01';
+ await page.locator('.sidebar [data-nav="settings"]').click();await page.locator('#import-file').setInputFiles({name:'bad.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(invalid))});await expect(page.locator('#toast')).toContainText('読み込めませんでした');
+});

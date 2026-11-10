@@ -19,9 +19,9 @@ test('Macとスマホで登録・解約通知・予算・削除を同じアカ�
   const [mac,phone]=pages;
   await mac.goto(baseURL);await expect(mac.locator('#sync-state')).toHaveText('クラウドに同期済み');
   await mac.getByRole('button',{name:'サブスクを追加',exact:true}).click();
-  await mac.getByLabel('サービス名').fill('端末間同期テスト');await mac.getByLabel('料金（円）').fill('1200');await mac.getByLabel('解約通知を設定する').check();await mac.getByRole('dialog').getByRole('button',{name:'サブスクを追加',exact:true}).click();
-  await expect(mac.locator('#sync-state')).toHaveText('クラウドに同期済み');expect(cloud.payload.subscriptions[0].reminder.enabled).toBe(true);
-  await phone.goto(baseURL);await expect(phone.locator('.subscription-card')).toContainText('端末間同期テスト');
+  await mac.getByLabel('サービス名').fill('端末間同期テスト');await mac.getByLabel('通貨',{exact:true}).selectOption('USD');await mac.getByLabel('料金（米ドル）').fill('20');await mac.getByLabel('解約通知を設定する').check();await mac.getByLabel('キャンペーンを設定する').check();await mac.getByLabel('キャンペーン内容').fill('初月半額');await mac.getByLabel('キャンペーン開始日').fill('2026-11-01');await mac.getByLabel('キャンペーン終了日').fill('2026-11-30');await mac.getByRole('dialog').getByRole('button',{name:'サブスクを追加',exact:true}).click();
+  await expect(mac.locator('#sync-state')).toHaveText('クラウドに同期済み');expect(cloud.payload.subscriptions[0].reminder.enabled).toBe(true);expect(cloud.payload.subscriptions[0].campaign.content).toBe('初月半額');expect(cloud.payload.subscriptions[0].price).toBe(3100);expect(cloud.payload.subscriptions[0].originalPrice).toBe(20);
+  await phone.goto(baseURL);await expect(phone.locator('.subscription-card')).toContainText('端末間同期テスト');await expect(phone.locator('.campaign-summary')).toContainText('初月半額');await expect(phone.locator('.subscription-card')).toContainText('¥3,100');await expect(phone.locator('.original-currency')).toContainText('$20.00');
   await mac.locator('.sidebar [data-nav="settings"]').click();await mac.getByLabel('月の予算（円）').fill('12345');await mac.getByRole('button',{name:'予算を保存'}).click();await expect(mac.locator('#sync-state')).toHaveText('クラウドに同期済み');
   await phone.getByRole('button',{name:'同期を確認'}).click();await phone.locator('.sidebar [data-nav="settings"]').click();await expect(phone.getByLabel('月の予算（円）')).toHaveValue('12345');
   await phone.locator('.sidebar [data-nav="subscriptions"]').click();await phone.locator('.subscription-card').click();
